@@ -25,6 +25,28 @@ async function fetchEmployees() {
   return FALLBACK_EMPLOYEES;
 }
 
+async function fetchEmployeeTodayPunches(employeeName) {
+  const today    = new Date();
+  const month    = today.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const todayISO = toLocalISO(today);
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL + "?action=GET_PUNCHES&month=" + encodeURIComponent(month), { redirect: "follow" });
+    const data = JSON.parse(await res.text());
+    if (!data.success || !data.punches) return { log: [], hasClockIn: false, hasClockOut: false, hasLunch: false, isIn: false };
+    const punches = data.punches.filter(p => p.employee === employeeName && p.date === todayISO);
+    const log = [];
+    let hasClockIn = false, hasClockOut = false, hasLunch = false, isIn = false, clockInTime = "";
+    punches.forEach(p => {
+      if (p.clockIn)  { log.push({ action: "CLOCK_IN",  time: p.clockIn  }); hasClockIn  = true; clockInTime = p.clockIn; isIn = true; }
+      if (p.lunch)    { log.push({ action: "LUNCH",     time: p.lunch    }); hasLunch    = true; }
+      if (p.clockOut) { log.push({ action: "CLOCK_OUT", time: p.clockOut }); hasClockOut = true; isIn = false; }
+    });
+    return { log, hasClockIn, hasClockOut, hasLunch, isIn, clockInTime };
+  } catch (err) {
+    return { log: [], hasClockIn: false, hasClockOut: false, hasLunch: false, isIn: false };
+  }
+}
+
 async function fetchTodayStatus(employeeNames) {
   // Get today's punches and reconstruct who is currently clocked in
   const today = new Date();
@@ -220,7 +242,7 @@ function Toast({ message, color, onDone }) {
 }
 
 // ─── CLOCK SCREEN ────────────────────────────────────────────────────────────
-function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivity, initialLog }) {
+function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivity, initialLog, todayData }) {
   const [pending, setPending]       = useState(null);
   const [toast, setToast]           = useState(null);
   const [syncQueue, setSyncQueue]   = useState([]);
@@ -235,12 +257,14 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
   const handleAction = (action) => {
     onActivity();
     if (action === "CLOCK_IN" && isIn)         { showToast("Already clocked in today", "#FF5A5A"); return; }
-    if (action === "CLOCK_IN" && todayLog.some(e => e.action === "CLOCK_IN")) {
+    const alreadyIn = todayLog.some(e => e.action === "CLOCK_IN") || (todayData && todayData.hasClockIn);
+    if (action === "CLOCK_IN" && alreadyIn) {
       showToast("Already clocked in today", "#FF5A5A"); return;
     }
     if (action === "CLOCK_OUT" && isOut)       { showToast("Not clocked in", "#FF5A5A"); return; }
     if (action === "LUNCH" && !isIn)           { showToast("Clock in first", "#FF5A5A"); return; }
-    if (action === "LUNCH" && todayLog.some(e => e.action === "LUNCH")) {
+    const alreadyLunch = todayLog.some(e => e.action === "LUNCH") || (todayData && todayData.hasLunch);
+    if (action === "LUNCH" && alreadyLunch) {
       showToast("Lunch already logged", "#F5A623"); return;
     }
     setPending({ action, employee:employee.name, timestamp:new Date() });
@@ -329,8 +353,8 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
           <p style={st.activityTitle}>Today's Activity</p>
           {todayLog.map((entry, i) => (
             <div key={i} style={st.activityRow}>
-              <span style={st.activityAction}>{entry.action.replace("_"," ")}</span>
-              <span style={st.activityTime}>{entry.time}</span>
+              <span style={st.activityAction}>{entry.action.replace(/_/g," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase())}</span>
+              <span style={st.activityTime}>{entry.time && entry.time.includes(":") ? (Number(entry.time.split(":")[0])%12||12) + ":" + entry.time.split(":")[1] + " " + (Number(entry.time.split(":")[0])>=12?"PM":"AM") : entry.time}</span>
             </div>
           ))}
         </div>
@@ -418,7 +442,18 @@ function TealuxClock() {
     setScreen("pin");
   };
 
-  const onPinSuccess = () => {
+  const onPinSuccess = async () => {
+    if (!selectedEmp) return;
+    const result = await fetchEmployeeTodayPunches(selectedEmp.name);
+    // Update shift status based on real data
+    setShiftStatus(prev => {
+      const n = { ...prev };
+      n[selectedEmp.name] = result.isIn ? "IN" : null;
+      if (result.clockInTime) n[selectedEmp.name + "_in"] = result.clockInTime;
+      return n;
+    });
+    // Seed today's punches for this employee
+    setTodayPunches(prev => ({ ...prev, [selectedEmp.name]: result }));
     setScreen("clock");
   };
 
@@ -480,7 +515,8 @@ function TealuxClock() {
             setShiftStatus={setShiftStatus}
             onLogout={logout}
             onActivity={resetTimer}
-            initialLog={todayPunches[selectedEmp.name] || []}
+            initialLog={todayPunches[selectedEmp.name]?.log || []}
+            todayData={todayPunches[selectedEmp.name] || {}}
           />
           {/* Auto-logout countdown */}
           <div style={st.countdownBar}>
