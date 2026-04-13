@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzra1hhtBCp4sZ_4Jaxuy26o8-NyB-xm4hDIjPWhKqTMRDXac3PclYUJn8mIakKXMR9VQ/exec";
 
@@ -952,7 +951,7 @@ function Exceptions({ punches, setPunches, employees }) {
 }
 
 // ── MAIN DASHBOARD ───────────────────────────────────────────────────────────
-export default function TealuxAdmin() {
+function TealuxAdmin() {
   const [active, setActive]         = useState("overview");
   const [employees, setEmployees]   = useState(INIT_EMPLOYEES);
   const [punches, setPunches]       = useState(INIT_PUNCHES);
@@ -1102,3 +1101,7 @@ const s = {
 const blk = {
   block: { borderRadius:8, padding:"8px 6px", display:"flex", flexDirection:"column", alignItems:"center", gap:2, userSelect:"none", minHeight:52, justifyContent:"center" },
 };
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(TealuxAdmin));

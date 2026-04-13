@@ -1,4 +1,3 @@
-import { useState, useEffect, useCallback } from "react";
 
 // ─── CONFIG ─────────────────────────────────────────────────────────────────
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzra1hhtBCp4sZ_4Jaxuy26o8-NyB-xm4hDIjPWhKqTMRDXac3PclYUJn8mIakKXMR9VQ/exec";
@@ -100,7 +99,7 @@ function Toast({ message, color, onDone }) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function TealuxClock() {
+function TealuxClock() {
   const [now, setNow] = useState(new Date());
   const [employees] = useState(INITIAL_EMPLOYEES);
   const [selected, setSelected] = useState("");
@@ -499,3 +498,7 @@ const styles = {
     boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
   },
 };
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(TealuxClock));
