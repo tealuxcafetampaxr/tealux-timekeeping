@@ -59,9 +59,9 @@ const TWO_WEEKS_MS   = 14 * 24 * 60 * 60 * 1000;
 
 // ── INIT DATA ─────────────────────────────────────────────────────────────────
 const INIT_EMPLOYEES = [
-  { id: 1, name: "Kha",        position: "Manager", rate: 18.00, custom: [{ label: "Mid",     start: "12:00", end: "17:00" }, { label: "Split",   start: "11:00", end: "15:00" }] },
-  { id: 2, name: "Employee 2", position: "Barista", rate: 13.00, custom: [{ label: "Shift A", start: "12:00", end: "17:00" }, { label: "Shift B", start: "15:00", end: "19:00" }] },
-  { id: 3, name: "Employee 3", position: "Crew",    rate: 12.00, custom: [{ label: "Shift A", start: "12:00", end: "17:00" }, { label: "Shift B", start: "15:00", end: "19:00" }] },
+  { id: 1, name: "Kha",        position: "Manager", rate: 18.00, pin: "0412", custom: [{ label: "Mid",     start: "12:00", end: "17:00" }, { label: "Split",   start: "11:00", end: "15:00" }] },
+  { id: 2, name: "Employee 2", position: "Barista", rate: 13.00, pin: "0101", custom: [{ label: "Shift A", start: "12:00", end: "17:00" }, { label: "Shift B", start: "15:00", end: "19:00" }] },
+  { id: 3, name: "Employee 3", position: "Crew",    rate: 12.00, pin: "0101", custom: [{ label: "Shift A", start: "12:00", end: "17:00" }, { label: "Shift B", start: "15:00", end: "19:00" }] },
 ];
 
 const today = new Date();
@@ -245,13 +245,13 @@ function Employees({ employees, setEmployees }) {
 
   const toggle = (id) => setExpanded(p => ({ ...p, [id]:!p[id] }));
 
-  const startEdit = (emp) => setEditing(p => ({ ...p, [emp.id]:{ name:emp.name, position:emp.position, rate:emp.rate } }));
+  const startEdit = (emp) => setEditing(p => ({ ...p, [emp.id]:{ name:emp.name, position:emp.position, rate:emp.rate, pin:emp.pin||"" } }));
 
   const saveEdit = (id) => {
     const e = editing[id]; if (!e) return;
     if (!e.name.trim()) { alert("Name cannot be empty."); return; }
     if (employees.some(emp => emp.id !== id && emp.name.toLowerCase() === e.name.trim().toLowerCase())) { alert(`"${e.name.trim()}" already exists.`); return; }
-    setEmployees(p => p.map(emp => emp.id===id ? { ...emp, name:e.name.trim(), position:e.position, rate:e.rate!==""&&!isNaN(parseFloat(e.rate))?parseFloat(e.rate):emp.rate } : emp));
+    setEmployees(p => p.map(emp => emp.id===id ? { ...emp, name:e.name.trim(), position:e.position, rate:e.rate!==""&&!isNaN(parseFloat(e.rate))?parseFloat(e.rate):emp.rate, pin:e.pin||"" } : emp));
     setEditing(p => { const n={...p}; delete n[id]; return n; });
     setSavedId(id); setTimeout(()=>setSavedId(null), 2000);
   };
@@ -267,7 +267,7 @@ function Employees({ employees, setEmployees }) {
   const add = () => {
     if (!newEmp.name.trim()) return;
     if (employees.some(e => e.name.toLowerCase()===newEmp.name.trim().toLowerCase())) { alert(`"${newEmp.name.trim()}" already exists.`); return; }
-    setEmployees(p => [...p, { id:Date.now(), name:newEmp.name.trim(), position:newEmp.position.trim()||"Crew", rate:newEmp.rate!==""&&!isNaN(parseFloat(newEmp.rate))?parseFloat(newEmp.rate):0, custom:[{label:"Shift A",start:"11:00",end:"15:00"},{label:"Shift B",start:"15:00",end:"19:00"}] }]);
+    setEmployees(p => [...p, { id:Date.now(), name:newEmp.name.trim(), position:newEmp.position.trim()||"Crew", rate:newEmp.rate!==""&&!isNaN(parseFloat(newEmp.rate))?parseFloat(newEmp.rate):0, pin:"", custom:[{label:"Shift A",start:"11:00",end:"15:00"},{label:"Shift B",start:"15:00",end:"19:00"}] }]);
     setNewEmp({ name:"", position:"", rate:"" });
   };
 
@@ -319,6 +319,11 @@ function Employees({ employees, setEmployees }) {
                             <input style={{ ...s.input, width:90, paddingLeft:22 }} type="number" min="0" step="0.25" value={ed.rate} onChange={e=>setEditing(p=>({...p,[emp.id]:{...ed,rate:e.target.value}}))} />
                           </div>
                         </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:4, minWidth:100 }}>
+                          <label style={s.fieldLabel}>PIN (4-digit)</label>
+                          <input style={{ ...s.input, width:90 }} type="password" maxLength={4} placeholder="MMDD"
+                            value={ed.pin||""} onChange={e=>setEditing(p=>({...p,[emp.id]:{...ed,pin:e.target.value.replace(/\D/g,"").slice(0,4)}}))} />
+                        </div>
                         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                           <button style={s.saveBtn} onClick={()=>saveEdit(emp.id)}>Save</button>
                           <button style={s.ghostBtn} onClick={()=>cancelEdit(emp.id)}>Cancel</button>
@@ -331,6 +336,7 @@ function Employees({ employees, setEmployees }) {
                       <div style={{ display:"flex", gap:32, flexWrap:"wrap", marginBottom:16 }}>
                         <div style={s.detailItem}><span style={s.fieldLabel}>Position</span><span style={s.detailVal}>{emp.position||"—"}</span></div>
                         <div style={s.detailItem}><span style={s.fieldLabel}>Hourly Rate</span><span style={{ ...s.detailVal, color:"#00C896" }}>${Number(emp.rate).toFixed(2)}/hr</span></div>
+                        <div style={s.detailItem}><span style={s.fieldLabel}>PIN</span><span style={{ ...s.detailVal, color:"#555", letterSpacing:4 }}>{emp.pin ? "••••" : "Not set"}</span></div>
                       </div>
                       <div style={{ display:"flex", gap:8 }}>
                         <button style={s.ghostBtn} onClick={e=>{e.stopPropagation();startEdit(emp);}}>Edit</button>
