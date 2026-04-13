@@ -17,7 +17,7 @@ async function fetchEmployees() {
     const text = await res.text();
     const data = JSON.parse(text);
     if (data.success && data.employees && data.employees.length > 0) {
-      return data.employees.filter(e => e.active !== false).map(e => ({ name: e.name, pin: String(e.pin || "").padStart(4, "0") }));
+      return data.employees.filter(e => e.name).map(e => ({ name: e.name, pin: String(e.pin || "").padStart(4, "0") }));
     }
   } catch (err) {
     console.error("Failed to load employees:", err);
