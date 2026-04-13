@@ -67,6 +67,13 @@ function ConfirmModal({ action, employee, timestamp, onConfirm, onCancel }) {
   const isLunch = action === "LUNCH";
   const label = isClockIn ? "Clock In" : isLunch ? "Log Lunch" : "Clock Out";
   const color = isClockIn ? "#00C896" : isLunch ? "#F5A623" : "#FF5A5A";
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    await onConfirm();
+  };
 
   return (
     <div style={styles.overlay}>
@@ -76,9 +83,12 @@ function ConfirmModal({ action, employee, timestamp, onConfirm, onCancel }) {
         <p style={styles.modalAction}>{label}?</p>
         <p style={styles.modalTime}>{formatTimestamp(timestamp)}</p>
         <div style={styles.modalButtons}>
-          <button style={styles.cancelBtn} onClick={onCancel}>Cancel</button>
-          <button style={{ ...styles.confirmBtn, background: color }} onClick={onConfirm}>
-            Confirm {label}
+          <button style={styles.cancelBtn} onClick={onCancel} disabled={submitting}>Cancel</button>
+          <button
+            style={{ ...styles.confirmBtn, background: color, opacity: submitting ? 0.5 : 1 }}
+            onClick={handleConfirm}
+            disabled={submitting}>
+            {submitting ? "Logging..." : "Confirm " + label}
           </button>
         </div>
       </div>
