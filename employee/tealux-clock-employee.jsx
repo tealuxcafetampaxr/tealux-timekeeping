@@ -220,23 +220,29 @@ function Toast({ message, color, onDone }) {
 }
 
 // ─── CLOCK SCREEN ────────────────────────────────────────────────────────────
-function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivity }) {
+function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivity, initialLog }) {
   const [pending, setPending]       = useState(null);
   const [toast, setToast]           = useState(null);
   const [syncQueue, setSyncQueue]   = useState([]);
+  const [todayLog, setTodayLog]     = useState(initialLog || []);
 
   const showToast = (msg, color="#00C896") => setToast({ message:msg, color });
 
   const status   = shiftStatus[employee.name] || null;
-  const isIn     = status === "IN";
-  const isLunch  = status === "LUNCH";
-  const isOut    = !status;
+  const isIn  = status === "IN";
+  const isOut = !status;
 
   const handleAction = (action) => {
     onActivity();
-    if (action === "CLOCK_IN" && isIn)    { showToast("Already clocked in", "#FF5A5A"); return; }
-    if (action === "CLOCK_OUT" && isOut)  { showToast("Not clocked in", "#FF5A5A"); return; }
-    if (action === "LUNCH" && !isIn)      { showToast("Not clocked in", "#FF5A5A"); return; }
+    if (action === "CLOCK_IN" && isIn)         { showToast("Already clocked in today", "#FF5A5A"); return; }
+    if (action === "CLOCK_IN" && todayLog.some(e => e.action === "CLOCK_IN")) {
+      showToast("Already clocked in today", "#FF5A5A"); return;
+    }
+    if (action === "CLOCK_OUT" && isOut)       { showToast("Not clocked in", "#FF5A5A"); return; }
+    if (action === "LUNCH" && !isIn)           { showToast("Clock in first", "#FF5A5A"); return; }
+    if (action === "LUNCH" && todayLog.some(e => e.action === "LUNCH")) {
+      showToast("Lunch already logged", "#F5A623"); return;
+    }
     setPending({ action, employee:employee.name, timestamp:new Date() });
   };
 
@@ -249,9 +255,10 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
 
     const newStatus = { ...shiftStatus };
     if (action === "CLOCK_IN")  { newStatus[empName] = "IN";   newStatus[empName+"_in"] = timeStr; }
-    else if (action === "LUNCH"){ newStatus[empName] = "LUNCH"; }
+    else if (action === "LUNCH"){ newStatus[empName] = "IN"; } // lunch is just a timestamp, not a state
     else                        { newStatus[empName] = null; delete newStatus[empName+"_in"]; }
     setShiftStatus(newStatus);
+    setTodayLog(prev => [...prev, { action, time: fmt12(new Date()) }]);
 
     const payload = {
       action:       "LOG_PUNCH",
@@ -284,7 +291,7 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
   const actions = [
     { action:"CLOCK_IN",  label:"Clock In",   icon:"▶", active:isOut,        bg:"#00C896", tc:"#0D0D0F" },
     { action:"LUNCH",     label:"Log Lunch",  icon:"☕", active:isIn,         bg:"#F5A623", tc:"#0D0D0F" },
-    { action:"CLOCK_OUT", label:"Clock Out",  icon:"■", active:isIn||isLunch, bg:"#FF5A5A", tc:"#fff"    },
+    { action:"CLOCK_OUT", label:"Clock Out",  icon:"■", active:isIn,          bg:"#FF5A5A", tc:"#fff"    },
   ];
 
   return (
@@ -295,8 +302,8 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
         <div>
           <div style={st.empName}>{employee.name}</div>
           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ ...st.statusDot, background: isIn?"#00C896":isLunch?"#F5A623":"#333" }} />
-            <span style={st.statusText}>{isIn?"Clocked In":isLunch?"On Lunch":"Not Clocked In"}</span>
+            <span style={{ ...st.statusDot, background: isIn?"#00C896":"#333" }} />
+            <span style={st.statusText}>{isIn?"Clocked In":"Not Clocked In"}</span>
           </div>
         </div>
         <button style={st.logoutBtn} onClick={onLogout}>Log Out</button>
@@ -316,6 +323,19 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
         <div style={st.syncWarning}>⚠ {syncQueue.length} punch{syncQueue.length>1?"es":""} pending sync…</div>
       )}
 
+      {/* Today's activity for this employee */}
+      {todayLog.length > 0 && (
+        <div style={st.activityLog}>
+          <p style={st.activityTitle}>Today's Activity</p>
+          {todayLog.map((entry, i) => (
+            <div key={i} style={st.activityRow}>
+              <span style={st.activityAction}>{entry.action.replace("_"," ")}</span>
+              <span style={st.activityTime}>{entry.time}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {pending && <ConfirmModal {...pending} onConfirm={handleConfirm} onCancel={()=>{ setPending(null); onActivity(); }} />}
       {toast   && <Toast message={toast.message} color={toast.color} onDone={()=>setToast(null)} />}
     </div>
@@ -330,6 +350,7 @@ function TealuxClock() {
   const [shiftStatus, setShiftStatus] = useState({});
   const [employees, setEmployees]     = useState(FALLBACK_EMPLOYEES);
   const [loadingEmps, setLoadingEmps] = useState(true);
+  const [todayPunches, setTodayPunches] = useState({});
 
   useEffect(() => {
     fetchEmployees().then(async emps => {
@@ -339,6 +360,12 @@ function TealuxClock() {
       const todayStatus = await fetchTodayStatus(names);
       if (Object.keys(todayStatus).length > 0) {
         setShiftStatus(todayStatus);
+        // Store today's punches per employee for activity log
+        const logsByEmp = {};
+        names.forEach(name => {
+          logsByEmp[name] = (todayStatus["_punches_" + name] || []);
+        });
+        setTodayPunches(logsByEmp);
       }
       setLoadingEmps(false);
     });
@@ -422,7 +449,7 @@ function TealuxClock() {
           <div style={st.empGrid}>
             {employees.map(emp => {
               const s = shiftStatus[emp.name];
-              const dot = s==="IN"?"#00C896":s==="LUNCH"?"#F5A623":"#444";
+              const dot = s==="IN"?"#00C896":"#444";
               return (
                 <button key={emp.name} style={st.empBtn} onClick={() => selectEmployee(emp)}>
                   <span style={{ ...st.empDot, background:dot }} />
@@ -453,6 +480,7 @@ function TealuxClock() {
             setShiftStatus={setShiftStatus}
             onLogout={logout}
             onActivity={resetTimer}
+            initialLog={todayPunches[selectedEmp.name] || []}
           />
           {/* Auto-logout countdown */}
           <div style={st.countdownBar}>
@@ -521,5 +549,10 @@ const st = {
   modalButtons:  { display:"flex", gap:12, width:"100%" },
   cancelBtn:     { flex:1, padding:14, borderRadius:10, background:"transparent", border:"1px solid rgba(255,255,255,0.12)", color:"#888", fontSize:14, cursor:"pointer", fontFamily:"'Courier New',monospace" },
   confirmBtn:    { flex:2, padding:14, borderRadius:10, border:"none", color:"#0D0D0F", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Courier New',monospace" },
+  activityLog:   { marginTop:24, width:"100%", borderTop:"1px solid rgba(255,255,255,0.06)", paddingTop:16 },
+  activityTitle: { fontSize:11, color:"#555", letterSpacing:3, textTransform:"uppercase", marginBottom:10, marginTop:0 },
+  activityRow:   { display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.04)", fontSize:13 },
+  activityAction:{ color:"#00C896", fontWeight:700, textTransform:"capitalize" },
+  activityTime:  { color:"#555", fontSize:12 },
   toast:         { position:"fixed", bottom:48, left:"50%", transform:"translateX(-50%)", background:"#1A1A1E", borderRadius:10, padding:"14px 24px", fontSize:14, zIndex:200, boxShadow:"0 8px 32px rgba(0,0,0,0.4)", whiteSpace:"nowrap" },
 };
