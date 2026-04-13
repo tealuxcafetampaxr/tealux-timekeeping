@@ -17,7 +17,7 @@ async function fetchEmployees() {
     const text = await res.text();
     const data = JSON.parse(text);
     if (data.success && data.employees && data.employees.length > 0) {
-      return data.employees.filter(e => e.active !== false).map(e => ({ name: e.name, pin: String(e.pin || "") }));
+      return data.employees.filter(e => e.active !== false).map(e => ({ name: e.name, pin: String(e.pin || "").padStart(4, "0") }));
     }
   } catch (err) {
     console.error("Failed to load employees:", err);
@@ -140,7 +140,8 @@ function PinPad({ employee, onSuccess, onBack, onActivity }) {
     setPin(next);
     setError(false);
     if (next.length === 4) {
-      if (next === employee.pin) {
+      const empPin = String(employee.pin || "").padStart(4, "0");
+    if (next === empPin) {
         setTimeout(() => onSuccess(), 150);
       } else {
         setTimeout(() => { setError(true); setPin(""); }, 400);
@@ -332,7 +333,7 @@ function TealuxClock() {
 
   useEffect(() => {
     fetchEmployees().then(async emps => {
-      setEmployees(emps);
+      if (emps && emps.length > 0) setEmployees(emps);
       // Reconstruct shift status from today's sheet data
       const names = emps.map(e => e.name);
       const todayStatus = await fetchTodayStatus(names);
