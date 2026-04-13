@@ -555,14 +555,14 @@ function Payroll({ employees, punches }) {
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={s.payrollWeekLabel}>{label}</span>
                   {isLast&&<span style={{fontSize:11,color:"#00C896",background:"rgba(0,200,150,0.1)",padding:"3px 8px",borderRadius:6,fontWeight:700}}>PAY NOW</span>}
-                  {isLast&&<button style={{fontSize:11,color:"#0D0D0F",background:"#00C896",border:"none",padding:"3px 10px",borderRadius:6,fontWeight:700,cursor:"pointer",fontFamily:"'Courier New',monospace"}}
-                    onClick={()=>{
-                      employees.forEach(emp=>{
-                        const s=getWeekSummary(emp,offset);
-                        if(s.rounded>0) sheetPost({action:"LOG_PAYROLL",employee:emp.name,position:emp.position,week:`Week ${offset}`,dateRange:getWeekLabel(offset),weekStart:getWeekISO(offset)[0],daysWorked:s.days,rawHours:parseFloat(s.rawDisplay),roundedHours:s.rounded,rate:emp.rate,totalPay:s.pay,payrollDate:getPayrollDate(offset)}).catch(console.error);
+                  {isLast&&<button style={{fontSize:11,color:"#0D0D0F",background:"#00C896",border:"none",padding:"3px 10px",borderRadius:6,fontWeight:700,cursor:"pointer",fontFamily:"'Courier New',monospace",marginLeft:6}}
+                    onClick={function(){
+                      employees.forEach(function(emp){
+                        var sm=getWeekSummary(emp,offset);
+                        if(sm.rounded>0) sheetPost({action:"LOG_PAYROLL",employee:emp.name,position:emp.position,week:"Week "+offset,dateRange:getWeekLabel(offset),weekStart:getWeekISO(offset)[0],daysWorked:sm.days,rawHours:sm.rounded,roundedHours:sm.rounded,rate:emp.rate,totalPay:sm.pay,payrollDate:getPayrollDate(offset)}).catch(console.error);
                       });
-                      alert("Payroll logged to Google Sheet ✓");
-                    }}>Log to Sheet</button>
+                      alert("Payroll logged to Google Sheet");
+                    }}>Log to Sheet</button>}
                   {isCurrent&&<span style={{fontSize:11,color:"#F5A623",background:"rgba(245,166,35,0.1)",padding:"3px 8px",borderRadius:6}}>In Progress</span>}
                   {tag==="UPCOMING"&&<span style={{fontSize:11,color:"#555",background:"rgba(255,255,255,0.04)",padding:"3px 8px",borderRadius:6}}>Scheduled</span>}
                 </div>
