@@ -13,8 +13,9 @@ const FALLBACK_EMPLOYEES = [
 
 async function fetchEmployees() {
   try {
-    const res = await fetch(APPS_SCRIPT_URL + "?action=GET_EMPLOYEE_CONFIG");
-    const data = await res.json();
+    const res = await fetch(APPS_SCRIPT_URL + "?action=GET_EMPLOYEE_CONFIG", { redirect: "follow" });
+    const text = await res.text();
+    const data = JSON.parse(text);
     if (data.success && data.employees && data.employees.length > 0) {
       return data.employees.filter(e => e.active !== false).map(e => ({ name: e.name, pin: String(e.pin || "") }));
     }
@@ -22,6 +23,49 @@ async function fetchEmployees() {
     console.error("Failed to load employees:", err);
   }
   return FALLBACK_EMPLOYEES;
+}
+
+async function fetchTodayStatus(employeeNames) {
+  // Get today's punches and reconstruct who is currently clocked in
+  const today = new Date();
+  const month = today.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  const todayISO = toLocalISO(today);
+
+  try {
+    const res = await fetch(
+      APPS_SCRIPT_URL + "?action=GET_PUNCHES&month=" + encodeURIComponent(month),
+      { redirect: "follow" }
+    );
+    const text = await res.text();
+    const data = JSON.parse(text);
+    if (!data.success || !data.punches) return {};
+
+    // Filter to today's punches only
+    const todayPunches = data.punches.filter(p => p.date === todayISO);
+
+    // For each employee find their last action today
+    const status = {};
+    employeeNames.forEach(name => {
+      const empPunches = todayPunches.filter(p => p.employee === name);
+      if (empPunches.length === 0) return;
+
+      // Last punch determines status
+      const last = empPunches[empPunches.length - 1];
+      if (last.clockIn && !last.clockOut) {
+        status[name] = "IN";
+        status[name + "_in"] = last.clockIn;
+      } else if (last.lunch && !last.clockOut) {
+        status[name] = "LUNCH";
+      } else {
+        status[name] = null;
+      }
+    });
+
+    return status;
+  } catch (err) {
+    console.error("Failed to load today status:", err);
+    return {};
+  }
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -287,8 +331,14 @@ function TealuxClock() {
   const [loadingEmps, setLoadingEmps] = useState(true);
 
   useEffect(() => {
-    fetchEmployees().then(emps => {
+    fetchEmployees().then(async emps => {
       setEmployees(emps);
+      // Reconstruct shift status from today's sheet data
+      const names = emps.map(e => e.name);
+      const todayStatus = await fetchTodayStatus(names);
+      if (Object.keys(todayStatus).length > 0) {
+        setShiftStatus(todayStatus);
+      }
       setLoadingEmps(false);
     });
   }, []);
@@ -364,9 +414,12 @@ function TealuxClock() {
       {/* ── HOME: Employee select ── */}
       {screen === "home" && (
         <div style={st.section}>
-          <p style={st.label}>Who are you?</p>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <p style={{ ...st.label, marginBottom:0 }}>Who are you?</p>
+            {loadingEmps && <span style={{ fontSize:11, color:"#444", letterSpacing:1 }}>syncing…</span>}
+          </div>
           <div style={st.empGrid}>
-            {loadingEmps ? <div style={{color:'#555',fontSize:13}}>Loading...</div> : employees.map(emp => {
+            {employees.map(emp => {
               const s = shiftStatus[emp.name];
               const dot = s==="IN"?"#00C896":s==="LUNCH"?"#F5A623":"#444";
               return (
