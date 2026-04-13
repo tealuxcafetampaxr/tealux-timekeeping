@@ -4,12 +4,25 @@ const { useState, useEffect, useCallback, useRef } = React;
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzra1hhtBCp4sZ_4Jaxuy26o8-NyB-xm4hDIjPWhKqTMRDXac3PclYUJn8mIakKXMR9VQ/exec";
 const AUTO_LOGOUT_SECS = 10;
 
-// Employee list with PINs — keep in sync with admin dashboard
-const EMPLOYEES = [
-  { name: "Kha",        pin: "0412" },
-  { name: "Employee 2", pin: "0101" },
-  { name: "Employee 3", pin: "0101" },
+// Fallback employees if sheet is unreachable
+const FALLBACK_EMPLOYEES = [
+  { name: "Kha",        pin: "" },
+  { name: "Employee 2", pin: "" },
+  { name: "Employee 3", pin: "" },
 ];
+
+async function fetchEmployees() {
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + "?action=GET_EMPLOYEE_CONFIG");
+    const data = await res.json();
+    if (data.success && data.employees && data.employees.length > 0) {
+      return data.employees.filter(e => e.active !== false).map(e => ({ name: e.name, pin: String(e.pin || "") }));
+    }
+  } catch (err) {
+    console.error("Failed to load employees:", err);
+  }
+  return FALLBACK_EMPLOYEES;
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function formatTime(date) {
@@ -270,6 +283,15 @@ function TealuxClock() {
   const [screen, setScreen]           = useState("home");
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [shiftStatus, setShiftStatus] = useState({});
+  const [employees, setEmployees]     = useState(FALLBACK_EMPLOYEES);
+  const [loadingEmps, setLoadingEmps] = useState(true);
+
+  useEffect(() => {
+    fetchEmployees().then(emps => {
+      setEmployees(emps);
+      setLoadingEmps(false);
+    });
+  }, []);
   const [countdown, setCountdown]     = useState(AUTO_LOGOUT_SECS);
   const timerRef                      = useRef(null);
   const countRef                      = useRef(null);
@@ -344,7 +366,7 @@ function TealuxClock() {
         <div style={st.section}>
           <p style={st.label}>Who are you?</p>
           <div style={st.empGrid}>
-            {EMPLOYEES.map(emp => {
+            {loadingEmps ? <div style={{color:'#555',fontSize:13}}>Loading...</div> : employees.map(emp => {
               const s = shiftStatus[emp.name];
               const dot = s==="IN"?"#00C896":s==="LUNCH"?"#F5A623":"#444";
               return (

@@ -236,6 +236,14 @@ function Overview({ employees, punches }) {
   );
 }
 
+// ── SYNC EMPLOYEE CONFIG TO SHEET ────────────────────────────────────────────
+function syncEmployeeConfig(employees) {
+  sheetPost({
+    action: "SAVE_EMPLOYEE_CONFIG",
+    employees: employees.map(e => ({ id:e.id, name:e.name, position:e.position, pin:e.pin||"", rate:e.rate }))
+  }).catch(console.error);
+}
+
 // ── EMPLOYEES ────────────────────────────────────────────────────────────────
 function Employees({ employees, setEmployees }) {
   const [expanded, setExpanded] = useState({});
@@ -254,13 +262,19 @@ function Employees({ employees, setEmployees }) {
     setEmployees(p => p.map(emp => emp.id===id ? { ...emp, name:e.name.trim(), position:e.position, rate:e.rate!==""&&!isNaN(parseFloat(e.rate))?parseFloat(e.rate):emp.rate, pin:e.pin||"" } : emp));
     setEditing(p => { const n={...p}; delete n[id]; return n; });
     setSavedId(id); setTimeout(()=>setSavedId(null), 2000);
+    // Sync employee config to sheet
+    syncEmployeeConfig([...employees.map(emp => emp.id===id ? { ...emp, name:e.name.trim(), position:e.position, rate:e.rate!==""&&!isNaN(parseFloat(e.rate))?parseFloat(e.rate):emp.rate, pin:e.pin||"" } : emp)]);
   };
 
   const cancelEdit = (id) => setEditing(p => { const n={...p}; delete n[id]; return n; });
 
   const remove = (id, name) => {
     if (!window.confirm(`Remove ${name}? This cannot be undone.`)) return;
-    setEmployees(p => p.filter(e => e.id!==id));
+    setEmployees(p => {
+      const updated = p.filter(e => e.id!==id);
+      syncEmployeeConfig(updated);
+      return updated;
+    });
     setExpanded(p => { const n={...p}; delete n[id]; return n; });
   };
 
@@ -269,6 +283,10 @@ function Employees({ employees, setEmployees }) {
     if (employees.some(e => e.name.toLowerCase()===newEmp.name.trim().toLowerCase())) { alert(`"${newEmp.name.trim()}" already exists.`); return; }
     setEmployees(p => [...p, { id:Date.now(), name:newEmp.name.trim(), position:newEmp.position.trim()||"Crew", rate:newEmp.rate!==""&&!isNaN(parseFloat(newEmp.rate))?parseFloat(newEmp.rate):0, pin:"", custom:[{label:"Shift A",start:"11:00",end:"15:00"},{label:"Shift B",start:"15:00",end:"19:00"}] }]);
     setNewEmp({ name:"", position:"", rate:"" });
+    // Sync after state update on next tick
+    setTimeout(() => {
+      setEmployees(curr => { syncEmployeeConfig(curr); return curr; });
+    }, 100);
   };
 
   return (
