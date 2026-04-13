@@ -258,7 +258,7 @@ function ClockScreen({ employee, shiftStatus, setShiftStatus, onLogout, onActivi
     else if (action === "LUNCH"){ newStatus[empName] = "IN"; } // lunch is just a timestamp, not a state
     else                        { newStatus[empName] = null; delete newStatus[empName+"_in"]; }
     setShiftStatus(newStatus);
-    setTodayLog(prev => [...prev, { action, time: fmt12(new Date()) }]);
+    setTodayLog(prev => [...prev, { action, time: formatTime(new Date()) }]);
 
     const payload = {
       action:       "LOG_PUNCH",
